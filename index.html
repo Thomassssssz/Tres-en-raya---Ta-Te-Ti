@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ta Te Ti con TensorFlow.js</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.0.0/dist/tf.min.js"></script>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background:
+          radial-gradient(circle at top, #312e81, transparent 35%),
+          linear-gradient(135deg, #020617, #111827, #1e1b4b);
+        color: white;
+        text-align: center;
+        margin: 0;
+        min-height: 100vh;
+        padding: 30px;
+      }
+
+      .contenedor {
+        max-width: 520px;
+        margin: auto;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 25px;
+        padding: 30px;
+        box-shadow: 0 0 35px rgba(99, 102, 241, 0.35);
+      }
+
+      h1 {
+        margin-bottom: 10px;
+        font-size: 38px;
+        text-shadow: 0 0 15px #6366f1;
+      }
+
+      p {
+        color: #d1d5db;
+        margin-bottom: 5px;
+      }
+
+      .subtitulo {
+        color: #a5b4fc;
+        font-weight: bold;
+      }
+
+      #tablero {
+        display: grid;
+        grid-template-columns: repeat(3, 110px);
+        grid-template-rows: repeat(3, 110px);
+        gap: 12px;
+        justify-content: center;
+        margin: 30px auto;
+      }
+
+      .celda {
+        width: 110px;
+        height: 110px;
+        font-size: 50px;
+        font-weight: bold;
+        border: 2px solid rgba(129, 140, 248, 0.4);
+        border-radius: 20px;
+        background: linear-gradient(145deg, #1e293b, #0f172a);
+        color: white;
+        cursor: pointer;
+        box-shadow:
+          inset 0 0 15px rgba(255, 255, 255, 0.04),
+          0 8px 20px rgba(0, 0, 0, 0.45);
+        transition: 0.2s;
+      }
+
+      .celda:hover {
+        transform: scale(1.06);
+        background: linear-gradient(145deg, #312e81, #1e1b4b);
+        box-shadow: 0 0 20px rgba(129, 140, 248, 0.7);
+      }
+
+      .x {
+        color: #38bdf8;
+        text-shadow: 0 0 15px #38bdf8;
+      }
+
+      .o {
+        color: #f472b6;
+        text-shadow: 0 0 15px #f472b6;
+      }
+
+      #mensaje {
+        font-size: 20px;
+        margin-top: 15px;
+        font-weight: bold;
+        min-height: 30px;
+        color: #facc15;
+      }
+
+      #reiniciar {
+        margin-top: 20px;
+        padding: 13px 28px;
+        font-size: 16px;
+        font-weight: bold;
+        border: none;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #6366f1, #ec4899);
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 0 18px rgba(236, 72, 153, 0.45);
+        transition: 0.2s;
+      }
+
+      #reiniciar:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 25px rgba(236, 72, 153, 0.75);
+      }
+
+      .footer {
+        margin-top: 25px;
+        font-size: 13px;
+        color: #94a3b8;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="contenedor">
+      <h1>TA-TE-TI IA</h1>
+      <p class="subtitulo">TensorFlow.js jugando contra vos</p>
+      <p>Jugador humano: <b>X</b> | Inteligencia artificial: <b>O</b></p>
+
+      <div id="tablero"></div>
+
+      <div id="mensaje">Cargando modelo...</div>
+
+      <button id="reiniciar">Reiniciar juego</button>
+
+      <div class="footer">
+        Modelo cargado con TensorFlow.js • Predicción por Softmax
+      </div>
+    </div>
+
+    <script>
+      let modelo;
+
+      /*
+        Representación del tablero según el modelo del libro:
+
+        -1 = X  jugador humano
+         0 = casilla vacía
+         1 = O  inteligencia artificial
+      */
+      let tablero = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+      let juegoTerminado = false;
+
+      const contenedorTablero = document.getElementById("tablero");
+      const mensaje = document.getElementById("mensaje");
+      const botonReiniciar = document.getElementById("reiniciar");
+
+      const descansosIA = [
+        "Te gané, máquina. Andá practicando porque así no llegás ni al recreo 😎",
+        "La IA te acaba de pasar por arriba como colectivo lleno en hora pico 🚌💀",
+        "Perdiste contra un archivo .bin, hermano. Durísimo lo tuyo 😭",
+        "Ni Boca defendiendo un resultado se cerró tan bien como yo 🤖",
+        "Te gané caminando. La próxima avisá y juego sin procesador 😂",
+        "La IA dice: gracias por venir, llevate un alfajor de consuelo 🍫",
+        "Te hice precio y aun así perdiste, rey 😏",
+        "Mamita querida... ni el tutorial te salva de esta 🤦‍♂️",
+        "Te gané con TensorFlow, pero podría haberte ganado con una calculadora Casio 🧠",
+        "No fue Ta-Te-Ti, fue trámite administrativo. Siguiente 📝",
+        "Te leí la jugada antes de que vos la pensaras, crack 👀",
+        "Perdiste más rápido que internet un día de tormenta 🌧️",
+        "La IA no perdona, pa. Esto no es fútbol 5 con amigos 😤",
+        "Te gané y todavía me sobró RAM. Qué momento 💀",
+        "Esa jugada fue más floja que mate lavado 🧉",
+        "El futuro llegó, y aparentemente sabe jugar mejor al Ta-Te-Ti que vos 🤖",
+        "Tranqui, campeón. Nadie nace sabiendo... pero vos venís complicado 😂",
+        "Te dormiste y la IA te arropó con una derrota 🛌",
+        "Ganó la máquina. El humano quedó en mantenimiento 🔧",
+        "Te gané sin despeinarme, y eso que ni pelo tengo 🤖",
+      ];
+
+      async function cargarModelo() {
+        modelo = await tf.loadLayersModel("model/ttt_model.json");
+        mensaje.textContent = "Tu turno. Elegí una casilla.";
+        dibujarTablero();
+      }
+
+      function dibujarTablero() {
+        contenedorTablero.innerHTML = "";
+
+        for (let i = 0; i < tablero.length; i++) {
+          const boton = document.createElement("button");
+          boton.className = "celda";
+
+          if (tablero[i] === -1) {
+            boton.textContent = "X";
+            boton.classList.add("x");
+          } else if (tablero[i] === 1) {
+            boton.textContent = "O";
+            boton.classList.add("o");
+          } else {
+            boton.textContent = "";
+          }
+
+          boton.addEventListener("click", function () {
+            jugarHumano(i);
+          });
+
+          contenedorTablero.appendChild(boton);
+        }
+      }
+
+      function jugarHumano(posicion) {
+        if (juegoTerminado) return;
+
+        if (tablero[posicion] !== 0) {
+          mensaje.textContent = "Esa casilla ya está ocupada, pillín.";
+          return;
+        }
+
+        tablero[posicion] = -1;
+        dibujarTablero();
+
+        if (verificarGanador(-1)) {
+          mensaje.textContent =
+            "Ganaste vos. La IA está recalculando su existencia 😳";
+          juegoTerminado = true;
+          return;
+        }
+
+        if (tableroLleno()) {
+          mensaje.textContent =
+            "Empate. Nadie ganó, nadie perdió, todos fingimos dignidad.";
+          juegoTerminado = true;
+          return;
+        }
+
+        mensaje.textContent = "Turno de la inteligencia artificial...";
+
+        setTimeout(jugarIA, 500);
+      }
+
+      function jugarIA() {
+        if (juegoTerminado) return;
+
+        const movimiento = predecirMejorMovimiento();
+
+        tablero[movimiento] = 1;
+        dibujarTablero();
+
+        if (verificarGanador(1)) {
+          mensaje.textContent = obtenerDescansoIA();
+          juegoTerminado = true;
+          return;
+        }
+
+        if (tableroLleno()) {
+          mensaje.textContent = "Empate. La IA te perdonó la vida esta vez 😌";
+          juegoTerminado = true;
+          return;
+        }
+
+        mensaje.textContent = "Tu turno. Pensalo bien, la IA está mirando 👀";
+      }
+
+      function predecirMejorMovimiento() {
+        return tf.tidy(function () {
+          /*
+            El modelo recibe un tensor con forma [1, 9].
+            Es decir: una partida, con nueve posiciones.
+          */
+          const entrada = tf.tensor([tablero]);
+
+          /*
+            model.predict devuelve 9 probabilidades.
+            Cada número representa qué tan buena es cada casilla.
+          */
+          const prediccion = modelo.predict(entrada);
+          const probabilidades = prediccion.dataSync();
+
+          let mejorPosicion = -1;
+          let mejorValor = -999;
+
+          /*
+            Se elige la casilla vacía con mayor probabilidad.
+            No se permite jugar arriba de una casilla ocupada.
+          */
+          for (let i = 0; i < probabilidades.length; i++) {
+            if (tablero[i] === 0 && probabilidades[i] > mejorValor) {
+              mejorValor = probabilidades[i];
+              mejorPosicion = i;
+            }
+          }
+
+          return mejorPosicion;
+        });
+      }
+
+      function verificarGanador(jugador) {
+        const combinaciones = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [0, 3, 6],
+          [1, 4, 7],
+          [2, 5, 8],
+          [0, 4, 8],
+          [2, 4, 6],
+        ];
+
+        for (let i = 0; i < combinaciones.length; i++) {
+          const a = combinaciones[i][0];
+          const b = combinaciones[i][1];
+          const c = combinaciones[i][2];
+
+          if (
+            tablero[a] === jugador &&
+            tablero[b] === jugador &&
+            tablero[c] === jugador
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      function tableroLleno() {
+        return !tablero.includes(0);
+      }
+
+      function obtenerDescansoIA() {
+        const posicion = Math.floor(Math.random() * descansosIA.length);
+        return descansosIA[posicion];
+      }
+
+      function reiniciarJuego() {
+        tablero = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        juegoTerminado = false;
+        mensaje.textContent = "Tu turno. Elegí una casilla.";
+        dibujarTablero();
+      }
+
+      botonReiniciar.addEventListener("click", reiniciarJuego);
+
+      cargarModelo();
+    </script>
+  </body>
+</html>
